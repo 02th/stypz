@@ -1,25 +1,94 @@
-import { api } from "@/lib/api";
-import { Activity, CreditCard, Cpu, Server } from "lucide-react";
+"use client";
 
-export default async function PortalHome() {
-  const [user, billing, instances] = await Promise.all([
-    api.getUser(),
-    api.getBilling(),
-    api.getInstances(),
-  ]);
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Activity, CreditCard, Cpu, Server, Loader2, Plus, RefreshCw } from "lucide-react";
+
+export default function PortalHome() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<any>(null);
+  const [billingData, setBillingData] = useState<any>(null);
+  const [instances, setInstances] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login?callbackUrl=/portal");
+      return;
+    }
+
+    if (status === "authenticated" && session?.user) {
+      // Fetch data client-side
+      const fetchData = async () => {
+        try {
+          const token = (session.user as any).accessToken;
+          const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+          const [userRes, billingRes, instancesRes] = await Promise.all([
+            fetch(`${apiBase}/user/me`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${apiBase}/billing`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${apiBase}/instances`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+          ]);
+
+          if (userRes.ok) setUserData(await userRes.json());
+          if (billingRes.ok) setBillingData(await billingRes.json());
+          if (instancesRes.ok) setInstances(await instancesRes.json());
+        } catch (error) {
+          console.error("Error fetching portal data:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchData();
+    }
+  }, [status, session, router]);
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 size={48} className="animate-spin text-blue-500 mx-auto" />
+          <p className="text-slate-500 font-medium">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const user = userData || { name: session?.user?.name || "User" };
+  const billing = billingData || { current_cycle_amount: 0 };
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-          Welcome back, <span className="text-gradient">{user.name}</span>
-        </h1>
-        <p className="text-sm font-medium text-slate-500">
-          Here&apos;s an overview of your Stypz infrastructure.
-        </p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+            Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-500">{user.name}</span>
+          </h1>
+          <p className="text-sm font-medium text-slate-500">
+            Here&apos;s an overview of your Stypz infrastructure.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/portal/instances")}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all whitespace-nowrap"
+        >
+          <Plus size={18} />
+          New Instance
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-6">
 
         {/* USAGE GRAPH */}
         <div className="premium-card p-5 sm:p-6 flex flex-col group relative overflow-hidden">
@@ -47,13 +116,16 @@ export default async function PortalHome() {
           </h2>
           <div>
             <div className="text-4xl sm:text-5xl font-bold tracking-tighter text-slate-900 mt-2">
-              ${billing.current_cycle_amount.toFixed(2)}
+              ${billing.current_cycle_amount?.toFixed(2) || "0.00"}
             </div>
             <p className="text-sm font-medium text-slate-500 mt-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Projected: ${(billing.current_cycle_amount + 2.4).toFixed(2)}
+              <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Projected: ${(billing.current_cycle_amount + 2.4 || 2.4).toFixed(2)}
             </p>
           </div>
-          <button className="mt-6 sm:mt-8 text-sm font-semibold text-indigo-600 self-start group-hover:underline px-4 py-2 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
+          <button 
+            onClick={() => router.push("/portal/billing")}
+            className="mt-6 sm:mt-8 text-sm font-semibold text-indigo-600 self-start group-hover:underline px-4 py-2 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+          >
             View detailed invoice
           </button>
         </div>
@@ -76,12 +148,30 @@ export default async function PortalHome() {
         {/* APPLICATIONS */}
         <div className="premium-card p-5 sm:p-6 flex flex-col group relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-100 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-          <h2 className="font-semibold text-slate-800 mb-4 flex items-center gap-2 text-sm sm:text-base">
-            <Server size={18} className="text-emerald-500 shrink-0" /> Active Applications
-          </h2>
-          <div className="space-y-2 sm:space-y-3 flex-1 overflow-y-auto pr-1">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
+              <Server size={18} className="text-emerald-500 shrink-0" /> Active Applications
+            </h2>
+            <button
+              onClick={() => setInstances([...instances])}
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={16} />
+            </button>
+          </div>
+          <div className="space-y-2 sm:space-y-3 flex-1 overflow-y-auto pr-1 max-h-48">
             {instances.length === 0 ? (
-              <div className="text-slate-400 text-sm font-medium italic">No applications running.</div>
+              <div className="text-center py-8">
+                <Server size={40} className="text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm font-medium italic">No applications running.</p>
+                <button
+                  onClick={() => router.push("/portal/instances")}
+                  className="mt-3 text-sm font-semibold text-blue-600 hover:underline"
+                >
+                  Deploy your first instance →
+                </button>
+              </div>
             ) : (
               instances.map((instance: any) => (
                 <div key={instance.id} className="flex justify-between items-center p-3 rounded-lg border border-slate-100 hover:border-slate-200 bg-white/50 transition-colors cursor-pointer group/item">

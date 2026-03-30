@@ -4,7 +4,8 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserPlus, Mail, Lock, User, Loader2 } from "lucide-react";
+import { UserPlus, Mail, Lock, User, Loader2, AlertCircle, CheckCircle } from "lucide-react";
+import { validateEmail } from "@/lib/emailValidator";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -13,12 +14,33 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long");
+      return;
+    }
+
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      setError(emailValidation.message || "Invalid email address");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -29,8 +51,8 @@ export default function SignupPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.detail || "Registration failed.");
+        const data = await res.json().catch(() => ({}));
+        setError(data.detail || "Registration failed. Please try again.");
         setLoading(false);
         return;
       }
@@ -48,6 +70,7 @@ export default function SignupPage() {
         setError("Account created but sign-in failed. Please log in manually.");
       } else {
         router.push("/portal");
+        router.refresh();
       }
     } catch {
       setLoading(false);
@@ -83,7 +106,8 @@ export default function SignupPage() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all"
+                  disabled={loading}
+                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -98,9 +122,16 @@ export default function SignupPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@stypz.me"
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all"
+                  disabled={loading}
+                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
+              <p className="text-xs text-slate-500 mt-1.5 ml-1">
+                <span className="flex items-center gap-1">
+                  <CheckCircle size={12} className="text-emerald-500" />
+                  Disposable/temporary emails are not allowed
+                </span>
+              </p>
             </div>
 
             <div>
@@ -114,21 +145,39 @@ export default function SignupPage() {
                   placeholder="Min. 8 characters"
                   required
                   minLength={8}
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all"
+                  disabled={loading}
+                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Confirm Password</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  required
+                  disabled={loading}
+                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
             {error && (
-              <div className="text-sm text-red-500 font-semibold bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
-                {error}
+              <div className="flex items-start gap-3 text-sm text-red-600 font-medium bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:pointer-events-none"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:pointer-events-none disabled:transform-none"
             >
               {loading ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
               {loading ? "Creating account..." : "Create Account"}
